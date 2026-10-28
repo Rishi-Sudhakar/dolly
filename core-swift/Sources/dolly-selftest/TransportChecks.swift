@@ -190,7 +190,7 @@ func runTransportChecks() {
         let reassembler = Reassembler()
         var w = ByteWriter()
         w.u32(1); w.u16(5); w.u16(3)  // index >= count
-        expectThrows(.malformedPacket) { try reassembler.add(chunk: w.data) }
+        expectThrows(.malformedPacket) { try reassembler.add(chunk: w.data) as Any }
 
         // More than 16 half-finished messages: the oldest is dropped, nothing explodes.
         for id in 0..<40 {
@@ -239,8 +239,15 @@ func runTransportChecks() {
     }
 
     test("transport conformance vectors") {
-        let (_, _, a, _) = try sessions()
-        let key = a.transportKey
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let url = root.appendingPathComponent("test-vectors/transport.json")
+
+        // Use the key recorded in vectors.json (written moments ago in write mode) so both files agree.
+        let handshake = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("test-vectors/vectors.json"))
+        ) as! [String: Any]
+        let key = hexData(handshake["transportKey"] as! String)
         let nonce = hexData("0102030405060708")
         let payload = Data((0..<50).map { UInt8($0) })
 
@@ -270,16 +277,11 @@ func runTransportChecks() {
             ],
         ]
         let json = try JSONSerialization.data(withJSONObject: vectors, options: [.prettyPrinted, .sortedKeys])
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let url = root.appendingPathComponent("test-vectors/transport.json")
         if CommandLine.arguments.contains("--write-vectors") {
             try json.write(to: url)
             print("    wrote \(url.path)")
         }
-        let committed = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? NSDictionary
-        let current = try JSONSerialization.jsonObject(with: json) as? NSDictionary
-        expect(committed == current, "transport wire format changed; re-run with --write-vectors only if intentional")
+        try replayTransportVectors(at: url)
     }
 
     // Optional checks that touch the real network or real sockets.
@@ -324,5 +326,77 @@ private func runLiveStunCheck() {
         for r in results { print("    via \(dotted(r.server)) -> \(dotted(r.mapped))") }
         if results.isEmpty { print("    NOTE: no STUN answers (offline, or UDP blocked); not counted as a failure") }
         print("    NAT mapping: \(Stun.mappingBehavior(results.map { $0.mapped }))")
+    }
+}
+
+// MARK: - Replaying committed vectors
+
+/// Rebuilds both peers from the seeds and tickets in vectors.json and demands the exact recorded packets.
+/// This is the same test the Kotlin implementation runs.
+func replayCommittedVectors(at url: URL) throws {
+    let v = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    let nowValue = (v["now"] as! NSNumber).uint64Value
+    let alice = v["alice"] as! [String: Any]
+    let bob = v["bob"] as! [String: Any]
+
+    func generator(_ seeds: [String]) -> Session.KeyGenerator {
+        var next = 0
+        return {
+            defer { next += 1 }
+            return try! Curve25519.KeyAgreement.PrivateKey(rawRepresentation: hexData(seeds[next]))
+        }
+    }
+    func session(_ me: [String: Any], _ other: [String: Any]) throws -> Session {
+        let identity = try Identity(
+            signingSeed: hexData(me["signingSeed"] as! String),
+            agreementSeed: hexData(me["agreementSeed"] as! String)
+        )
+        return try Session(
+            identity: identity,
+            ephemeral: try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: hexData(me["ephemeralSeed"] as! String)),
+            localTicket: try Ticket.decode(hexData(me["ticket"] as! String), now: nowValue),
+            remoteTicket: try Ticket.decode(hexData(other["ticket"] as! String), now: nowValue),
+            keyGenerator: generator(me["ratchetSeeds"] as! [String])
+        )
+    }
+
+    let sessions = ["alice": try session(alice, bob), "bob": try session(bob, alice)]
+    for peer in sessions.values {
+        expect(peer.transportKey.hex == (v["transportKey"] as! String), "transport key differs from the committed vector")
+    }
+    for (i, message) in (v["messages"] as! [[String: Any]]).enumerated() {
+        let from = message["from"] as! String
+        let sender = sessions[from]!, receiver = sessions[from == "alice" ? "bob" : "alice"]!
+        let plaintext = hexData(message["plaintext"] as! String)
+        let recorded = message["packet"] as! String
+        let packet = try sender.encrypt(plaintext)
+        expect(packet.hex == recorded, "packet \(i) differs from the committed vector")
+        expect(try receiver.decrypt(hexData(recorded)) == plaintext, "packet \(i) did not decrypt")
+    }
+}
+
+func replayTransportVectors(at url: URL) throws {
+    let v = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    let key = hexData(v["transportKey"] as! String)
+
+    for (i, frame) in (v["frames"] as! [[String: Any]]).enumerated() {
+        let senderIsInitiator = frame["senderIsInitiator"] as! Bool
+        let datagram = hexData(frame["datagram"] as! String)
+        let decoded = try Frame.decode(datagram, key: key, localIsInitiator: !senderIsInitiator)
+        expect(decoded.encoded(key: key, isInitiator: senderIsInitiator) == datagram, "frame \(i) re-encodes differently")
+    }
+    for chunkCase in v["chunks"] as! [[String: Any]] {
+        let message = hexData(chunkCase["message"] as! String)
+        let id = UInt32(chunkCase["id"] as! Int)
+        let encoded = try AppMessage.encodeChunks(message, id: id).map { $0.hex }
+        expect(encoded == (chunkCase["chunks"] as! [String]), "chunk encoding differs from the committed vector")
+    }
+    let stun = v["stun"] as! [String: Any]
+    let txid = hexData(stun["transactionID"] as! String)
+    expect(Stun.bindingRequest(transactionID: txid).hex == (stun["request"] as! String), "STUN request differs")
+    for response in stun["responses"] as! [[String: Any]] {
+        let endpoint = try Stun.parseBindingResponse(hexData(response["hex"] as! String), transactionID: txid)
+        expect(endpoint.address.hex == (response["address"] as! String) && Int(endpoint.port) == (response["port"] as! Int),
+               "STUN response parsed differently")
     }
 }

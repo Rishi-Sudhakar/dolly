@@ -211,9 +211,9 @@ test("conformance vectors") {
         try json.write(to: url)
         print("    wrote \(url.path)")
     }
-    let committed = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? NSDictionary
-    let current = try JSONSerialization.jsonObject(with: json) as? NSDictionary
-    expect(committed == current, "wire format changed; re-run with DOLLY_WRITE_VECTORS=1 only if intentional")
+    // Ed25519 signatures from CryptoKit are randomized, so regenerated vectors never equal the committed
+    // ones. Replay the committed file instead: it must still reproduce byte for byte.
+    try replayCommittedVectors(at: url)
 }
 
 runTransportChecks()
