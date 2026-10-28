@@ -30,13 +30,17 @@ class VectorTest {
         return Peer(identity, ephemeral, ratchets, p.getString("ticket"))
     }
 
-    private fun session(local: Peer, remote: Peer): Session {
+    /**
+     * [reuseKeys] wraps around the fixed key list. Only for tests that discard a failed decrypt:
+     * the session rolls back, but the test's key supply does not.
+     */
+    private fun session(local: Peer, remote: Peer, reuseKeys: Boolean = false): Session {
         var next = 0
         return Session(
             local.identity, local.ephemeral,
             Ticket.decode(local.ticketHex.hexToBytes(), now),
             Ticket.decode(remote.ticketHex.hexToBytes(), now),
-            generate = { local.ratchets[next++] },
+            generate = { local.ratchets[if (reuseKeys) next++ % local.ratchets.size else next++] },
         )
     }
 
@@ -65,7 +69,7 @@ class VectorTest {
         val alice = peer("alice")
         val bob = peer("bob")
         val a = session(alice, bob)
-        val b = session(bob, alice)
+        val b = session(bob, alice, reuseKeys = true)
         val genuine = a.encrypt("hello".toByteArray())
         val forged = genuine.copyOf().also { it[it.size - 1] = (it[it.size - 1].toInt() xor 1).toByte() }
         assertEquals(DollyError.AuthenticationFailed, assertFailsWith<DollyException> { b.decrypt(forged) }.error)

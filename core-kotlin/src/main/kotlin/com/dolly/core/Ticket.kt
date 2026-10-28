@@ -51,7 +51,8 @@ class Ticket(
             val count = r.u8()
             if (count > MAX_ENDPOINTS) throw DollyException(DollyError.BadEndpoint)
             val endpoints = List(count) {
-                val kind = Endpoint.Kind.values().firstOrNull { k -> k.code == r.u8() }
+                val code = r.u8()
+                val kind = Endpoint.Kind.values().firstOrNull { k -> k.code == code }
                     ?: throw DollyException(DollyError.BadEndpoint)
                 Endpoint(kind, r.bytes(kind.length), r.u16())
             }

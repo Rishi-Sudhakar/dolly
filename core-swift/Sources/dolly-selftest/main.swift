@@ -188,8 +188,8 @@ test("conformance vectors") {
             "signingPublic": pb.identity.signing.publicKey.rawRepresentation.hex,
             "agreementSeed": Data(repeating: 0x12, count: 32).hex,
             "ephemeralSeed": Data(repeating: 0x13, count: 32).hex,
-            "ratchetSeeds": [0x51].map { Data(repeating: UInt8($0), count: 32).hex },
-            "ratchetPublics": [pub(0x51)],
+            "ratchetSeeds": [0x51, 0x52].map { Data(repeating: UInt8($0), count: 32).hex },
+            "ratchetPublics": [pub(0x51), pub(0x52)],
             "ticket": pb.ticket.encoded().hex,
         ],
         "messages": [

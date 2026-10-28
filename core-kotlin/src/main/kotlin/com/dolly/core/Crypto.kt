@@ -57,7 +57,8 @@ internal object Crypto {
 
     fun hmac(key: ByteArray, data: ByteArray): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key.ifEmpty { ByteArray(32) }, "HmacSHA256"))
+        // JCA rejects empty keys; HMAC pads keys with zeros, so an empty key equals 32 zero bytes.
+        mac.init(SecretKeySpec(if (key.isEmpty()) ByteArray(32) else key, "HmacSHA256"))
         return mac.doFinal(data)
     }
 
