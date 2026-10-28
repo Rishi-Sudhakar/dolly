@@ -1,5 +1,11 @@
 plugins {
     kotlin("jvm") version "2.0.21"
+    application
+}
+
+application {
+    mainClass.set("com.dolly.cli.MainKt")
+    applicationName = "dolly"
 }
 
 repositories {
@@ -14,6 +20,11 @@ dependencies {
 
 kotlin {
     jvmToolchain(17)
+}
+
+// `gradle run` needs the terminal's stdin to be interactive: gradle -q --console=plain run
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
 }
 
 tasks.test {

@@ -40,6 +40,18 @@ class UdpSocket(port: Int = 0) : AutoCloseable {
     override fun close() = socket.close()
 
     companion object {
+        /**
+         * IPv4 addresses of this machine's active network interfaces (loopback and link-local excluded).
+         * Candidates for peers on the same LAN, where a router often cannot loop packets back through its public address.
+         */
+        fun localIPv4Addresses(): List<ByteArray> =
+            (java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList())
+                .filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.toList() }
+                .filterIsInstance<Inet4Address>()
+                .filter { !it.isLinkLocalAddress }
+                .map { it.address }
+
         /** IPv4 addresses of [host] (DNS lookup). */
         fun resolve(host: String, port: Int): List<Endpoint> = try {
             InetAddress.getAllByName(host).filterIsInstance<Inet4Address>().map { Endpoint(Endpoint.Kind.V4, it.address, port) }
