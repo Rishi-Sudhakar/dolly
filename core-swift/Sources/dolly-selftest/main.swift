@@ -172,8 +172,10 @@ test("conformance vectors") {
         try! Curve25519.KeyAgreement.PrivateKey(rawRepresentation: Data(repeating: base, count: 32))
             .publicKey.rawRepresentation.hex
     }
+    expect(a.transportKey == b.transportKey && a.transportKey.count == 32, "peers must derive the same transport key")
     let vectors: [String: Any] = [
         "now": now,
+        "transportKey": a.transportKey.hex,
         "alice": [
             "signingSeed": Data(repeating: 0x01, count: 32).hex,
             "signingPublic": pa.identity.signing.publicKey.rawRepresentation.hex,
@@ -209,10 +211,12 @@ test("conformance vectors") {
         try json.write(to: url)
         print("    wrote \(url.path)")
     }
-    let committed = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? NSDictionary
-    let current = try JSONSerialization.jsonObject(with: json) as? NSDictionary
-    expect(committed == current, "wire format changed; re-run with DOLLY_WRITE_VECTORS=1 only if intentional")
+    // Ed25519 signatures from CryptoKit are randomized, so regenerated vectors never equal the committed
+    // ones. Replay the committed file instead: it must still reproduce byte for byte.
+    try replayCommittedVectors(at: url)
 }
+
+runTransportChecks()
 
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
 exit(failures == 0 ? 0 : 1)

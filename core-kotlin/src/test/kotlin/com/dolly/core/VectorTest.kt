@@ -49,6 +49,7 @@ class VectorTest {
         val alice = peer("alice")
         val bob = peer("bob")
         val sessions = mapOf("alice" to session(alice, bob), "bob" to session(bob, alice))
+        sessions.values.forEach { assertEquals(vectors.getString("transportKey"), it.transportKey.toHex(), "transport key differs from Swift") }
         assertTrue(sessions.getValue("alice").isInitiator)
         assertFalse(sessions.getValue("bob").isInitiator)
 

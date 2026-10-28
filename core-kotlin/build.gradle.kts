@@ -18,6 +18,8 @@ kotlin {
 
 tasks.test {
     useJUnit()
+    // The conformance vectors live outside this project; re-run whenever they change.
+    inputs.files(fileTree("../test-vectors"))
     testLogging {
         showStackTraces = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

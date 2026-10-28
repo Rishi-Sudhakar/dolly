@@ -13,6 +13,14 @@ class Endpoint(val kind: Kind, val address: ByteArray, val port: Int) {
     init {
         if (address.size != kind.length) throw DollyException(DollyError.BadEndpoint)
     }
+
+    fun sameAs(other: Endpoint): Boolean = kind == other.kind && port == other.port && address.contentEquals(other.address)
+
+    override fun equals(other: Any?): Boolean = other is Endpoint && sameAs(other)
+
+    override fun hashCode(): Int = 31 * (31 * kind.hashCode() + port) + address.contentHashCode()
+
+    override fun toString(): String = address.joinToString(".") { (it.toInt() and 0xff).toString() } + ":" + port
 }
 
 /** Signed, self-contained invitation to connect. Exchanged out of band (QR, RCS text, share sheet). */

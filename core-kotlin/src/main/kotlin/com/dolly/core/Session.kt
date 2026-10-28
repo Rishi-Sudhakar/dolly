@@ -44,6 +44,9 @@ class Session(
     val isInitiator: Boolean
     val peerIdentityKey: ByteArray = remoteTicket.identityKey
 
+    /** Authenticates transport datagrams (punches, acks, data). Both peers derive the same key from the handshake. */
+    val transportKey: ByteArray
+
     val canSend: Boolean get() = state.cks != null
 
     init {
@@ -60,6 +63,7 @@ class Session(
 
         val transcript = Crypto.sha256(a.encoded() + b.encoded())
         val rootKey = Crypto.hkdf(dh1 + dh2 + dh3, transcript, "dolly/v1/handshake", 32)
+        transportKey = Crypto.hkdf(rootKey, ByteArray(0), "dolly/v1/transport", 32)
         adPrefix = "dolly/v1/msg".toByteArray() + a.identityKey + b.identityKey
 
         state = if (isInitiator) {

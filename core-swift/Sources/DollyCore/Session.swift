@@ -40,6 +40,8 @@ public final class Session {
     private let generate: KeyGenerator
     public let isInitiator: Bool
     public let peerIdentityKey: Data
+    /// Authenticates transport datagrams (punches, acks, data). Both peers derive the same key from the handshake.
+    public let transportKey: Data
 
     public var canSend: Bool { state.cks != nil }
 
@@ -69,6 +71,7 @@ public final class Session {
         let transcript = Data(SHA256.hash(data: a.encoded() + b.encoded()))
         let rootKey = Session.hkdf(ikm: dh1 + dh2 + dh3, salt: transcript, info: "dolly/v1/handshake", length: 32)
 
+        transportKey = Session.hkdf(ikm: rootKey, salt: Data(), info: "dolly/v1/transport", length: 32)
         adPrefix = Data("dolly/v1/msg".utf8) + a.identityKey + b.identityKey
         generate = keyGenerator
         isInitiator = initiator

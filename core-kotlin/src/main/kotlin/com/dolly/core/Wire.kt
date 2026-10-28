@@ -6,6 +6,7 @@ enum class DollyError {
     Truncated, BadVersion, BadSuite, BadSignature, Expired, BadEndpoint,
     SameIdentity, NotReadyToSend, MessageTooLarge,
     MalformedPacket, AuthenticationFailed, TooManySkippedKeys,
+    BadStunResponse, ConnectionFailed,
 }
 
 class DollyException(val error: DollyError) : Exception(error.name)
