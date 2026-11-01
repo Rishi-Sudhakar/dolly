@@ -34,10 +34,14 @@ object Stun {
         throw DollyException(DollyError.BadStunResponse)
     }
 
-    /** Compare the mapped endpoints different STUN servers reported for the same local socket. */
+    /**
+     * Compare the mapped endpoints different STUN servers reported for the same local socket.
+     * Only IPv4 results count: IPv6 normally has no address translation to classify.
+     */
     fun mappingBehavior(results: List<Endpoint>): MappingBehavior {
-        if (results.size < 2) return MappingBehavior.Unknown
-        return if (results.all { it.sameAs(results[0]) }) MappingBehavior.EndpointIndependent else MappingBehavior.Symmetric
+        val v4 = results.filter { it.kind == Endpoint.Kind.V4 }
+        if (v4.size < 2) return MappingBehavior.Unknown
+        return if (v4.all { it.sameAs(v4[0]) }) MappingBehavior.EndpointIndependent else MappingBehavior.Symmetric
     }
 
     private fun bad(): Nothing = throw DollyException(DollyError.BadStunResponse)

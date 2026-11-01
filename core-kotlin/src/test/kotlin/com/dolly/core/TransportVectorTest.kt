@@ -105,6 +105,9 @@ class TransportVectorTest {
         assertEquals(Stun.MappingBehavior.Unknown, Stun.mappingBehavior(listOf(one)))
         assertEquals(Stun.MappingBehavior.EndpointIndependent, Stun.mappingBehavior(listOf(one, one)))
         assertEquals(Stun.MappingBehavior.Symmetric, Stun.mappingBehavior(listOf(one, two)))
+        val six = Endpoint(Endpoint.Kind.V6, ByteArray(16) { 0x20 }, 1000)
+        assertEquals(Stun.MappingBehavior.Unknown, Stun.mappingBehavior(listOf(one, six)))
+        assertEquals(Stun.MappingBehavior.EndpointIndependent, Stun.mappingBehavior(listOf(one, six, one)))
         assertTrue(one == Endpoint(Endpoint.Kind.V4, byteArrayOf(1, 2, 3, 4), 1000))
     }
 }

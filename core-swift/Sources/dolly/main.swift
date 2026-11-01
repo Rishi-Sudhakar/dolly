@@ -142,7 +142,7 @@ func run() throws {
                 ? "WARNING: no STUN answer (offline or UDP blocked). Only your local network address is offered."
                 : "Only one STUN server answered, so the network type is unknown.")
         }
-        for address in UDPSocket.localIPv4Addresses() { offer(try Endpoint(kind: .v4, address: address, port: socket.localPort)) }
+        UDPSocket.localAddresses(port: socket.localPort).forEach(offer)
     }
     guard !candidates.isEmpty else { fail("no usable network address found") }
 
