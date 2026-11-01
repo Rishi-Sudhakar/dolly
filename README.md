@@ -71,6 +71,34 @@ side first, then both suites re-run:
 cd core-swift && swift run dolly-selftest --write-vectors
 ```
 
+## Try it: chat in the terminal
+
+A command-line chat exists in both languages. It is the quickest way to test a real connection between
+two machines (or two networks), and a preview of how the apps will work.
+
+```sh
+# Swift
+cd core-swift && swift run dolly
+
+# Kotlin (JDK 17+)
+cd core-kotlin && gradle -q --console=plain run
+```
+
+1. Each side prints a **ticket** (a long line of text) and its key **fingerprint**.
+2. Send your ticket to the other person by any channel: text, RCS, email, chat.
+3. Paste theirs into your terminal within a minute or so, and keep both running.
+4. Compare the two fingerprints over a call to make sure you reached the right person.
+5. Type messages. `/quit` leaves. Messages only send while both sides are online.
+
+To check that the Swift and Kotlin implementations really interoperate over real UDP on one machine:
+
+```sh
+sh scripts/interop.sh
+```
+
+The tools have `--help`. Identities are created fresh on every run for now; permanent contacts come with
+the encrypted storage work.
+
 ## Security notes
 
 What is protected: message content and per-message keys, who you are talking to (via signed tickets,

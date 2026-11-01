@@ -99,6 +99,28 @@ public final class UDPSocket {
         return endpoints
     }
 
+    /// IPv4 addresses of this machine's active network interfaces (loopback and link-local excluded).
+    /// Candidates for peers on the same LAN, where a router often cannot loop packets back through its public address.
+    public static func localIPv4Addresses() -> [Data] {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return [] }
+        defer { freeifaddrs(list) }
+
+        var addresses: [Data] = []
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let current = cursor {
+            let flags = Int32(current.pointee.ifa_flags)
+            if let sa = current.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET),
+               flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 {
+                let sin = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+                let bytes = withUnsafeBytes(of: sin.sin_addr.s_addr) { Data($0) }
+                if !(bytes[0] == 169 && bytes[1] == 254) { addresses.append(bytes) }
+            }
+            cursor = current.pointee.ifa_next
+        }
+        return addresses
+    }
+
     private static func sockaddrIn(address: in_addr, port: UInt16) -> sockaddr_in {
         var sin = sockaddr_in()
         #if canImport(Darwin)
