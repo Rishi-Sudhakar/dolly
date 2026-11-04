@@ -4,7 +4,7 @@ public enum DollyError: Error, Equatable {
     case truncated, badVersion, badSuite, badSignature, expired, badEndpoint
     case sameIdentity, notReadyToSend, messageTooLarge
     case malformedPacket, authenticationFailed, tooManySkippedKeys
-    case badStunResponse, connectionFailed
+    case badStunResponse, connectionFailed, invalidKey
 }
 
 struct ByteWriter {
