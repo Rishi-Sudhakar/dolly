@@ -217,6 +217,7 @@ test("conformance vectors") {
 }
 
 runTransportChecks()
+runStorageChecks()
 
 print(failures == 0 ? "\nALL CHECKS PASSED" : "\n\(failures) CHECK(S) FAILED")
 exit(failures == 0 ? 0 : 1)

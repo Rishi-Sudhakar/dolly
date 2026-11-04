@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// A device's long-term keys. The Ed25519 key signs tickets; the X25519 key is used in the handshake.
-public struct Identity {
+public struct Identity: Sendable {
     public let signing: Curve25519.Signing.PrivateKey
     public let agreement: Curve25519.KeyAgreement.PrivateKey
 
@@ -17,8 +17,8 @@ public struct Identity {
     }
 }
 
-public struct Endpoint: Equatable {
-    public enum Kind: UInt8 { case v4 = 4, v6 = 6 }
+public struct Endpoint: Equatable, Sendable {
+    public enum Kind: UInt8, Sendable { case v4 = 4, v6 = 6 }
     public let kind: Kind
     public let address: Data
     public let port: UInt16
@@ -32,7 +32,7 @@ public struct Endpoint: Equatable {
 }
 
 /// Signed, self-contained invitation to connect. Exchanged out of band (QR, RCS text, share sheet).
-public struct Ticket: Equatable {
+public struct Ticket: Equatable, Sendable {
     public static let version: UInt8 = 1
     public static let suiteClassical: UInt8 = 1
     static let signatureDomain = Data("dolly/v1/ticket".utf8)
