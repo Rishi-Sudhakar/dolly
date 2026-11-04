@@ -144,6 +144,9 @@ func runTransportChecks() {
         expect(Stun.mappingBehavior([e1]) == .unknown)
         expect(Stun.mappingBehavior([e1, e1]) == .endpointIndependent)
         expect(Stun.mappingBehavior([e1, e2]) == .symmetric)
+        let v6 = try Endpoint(kind: .v6, address: Data(repeating: 0x20, count: 16), port: 1000)
+        expect(Stun.mappingBehavior([e1, v6]) == .unknown, "an IPv6 result is not a second IPv4 sample")
+        expect(Stun.mappingBehavior([e1, v6, e1]) == .endpointIndependent)
     }
 
     test("frames: round trip, tamper, wrong key, reflection") {
@@ -313,6 +316,23 @@ private func runLoopbackCheck() {
                "got \(gotA.count) and \(gotB.count) of 5 (states \(a.state) / \(b.state))")
         print("    delivered in \(monotonicMillis() - start) ms")
     }
+
+    test("loopback: IPv6 datagrams keep their IPv6 sender, IPv4 ones their IPv4 sender") {
+        let a = try UDPSocket(), b = try UDPSocket()
+        var ip6 = Data(count: 16)
+        ip6[15] = 1  // ::1
+        let ip4 = Data([127, 0, 0, 1])
+
+        try a.send(Data("six".utf8), to: Endpoint(kind: .v6, address: ip6, port: b.localPort))
+        let six = b.receive(timeoutMs: 1000)
+        expect(six?.0 == Data("six".utf8), "IPv6 payload")
+        expect(six?.1 == (try Endpoint(kind: .v6, address: ip6, port: a.localPort)), "IPv6 sender")
+
+        try a.send(Data("four".utf8), to: Endpoint(kind: .v4, address: ip4, port: b.localPort))
+        let four = b.receive(timeoutMs: 1000)
+        expect(four?.0 == Data("four".utf8), "IPv4 payload")
+        expect(four?.1 == (try Endpoint(kind: .v4, address: ip4, port: a.localPort)), "IPv4 sender")
+    }
 }
 
 private func runLiveStunCheck() {
@@ -322,7 +342,9 @@ private func runLiveStunCheck() {
             + UDPSocket.resolve(host: "stun.cloudflare.com", port: 3478)
         print("    resolved \(servers.count) STUN server address(es)")
         let results = StunClient.discover(socket: socket, servers: servers)
-        func dotted(_ e: Endpoint) -> String { e.address.map { String($0) }.joined(separator: ".") + ":" + String(e.port) }
+        func dotted(_ e: Endpoint) -> String {
+            e.kind == .v4 ? e.address.map { String($0) }.joined(separator: ".") + ":" + String(e.port) : "[" + e.address.hex + "]:" + String(e.port)
+        }
         for r in results { print("    via \(dotted(r.server)) -> \(dotted(r.mapped))") }
         if results.isEmpty { print("    NOTE: no STUN answers (offline, or UDP blocked); not counted as a failure") }
         print("    NAT mapping: \(Stun.mappingBehavior(results.map { $0.mapped }))")

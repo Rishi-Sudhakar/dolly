@@ -123,7 +123,10 @@ and the same logic drives real sockets through a thin adapter (`UDPSocket` / `Ud
   connections will fail with `punchTimeout`. Wi-Fi to Wi-Fi works far more often. A stateless relay
   that forwards ciphertext (without storing anything) would be the fallback if this matters, but it
   is a server and so it is deliberately not part of v1.
-- The socket adapters are IPv4 only; the frame and STUN codecs already handle IPv6.
+- The socket adapters are dual-stack: one socket carries IPv6 and IPv4, with IPv4 peers addressed as
+  IPv4-mapped IPv6 addresses. Tickets carry both kinds of candidate (at most 8 in total, so IPv6
+  addresses from STUN and the interfaces compete with IPv4 ones for space). NAT mapping classification
+  looks at IPv4 STUN results only. IPv6 has not yet been tested on a real IPv6-only network.
 - Both apps must be open (or, on Android, held by a foreground service). iOS cannot hold a socket in
   the background.
 - No ticket-exchange UI, local storage or app screens yet.

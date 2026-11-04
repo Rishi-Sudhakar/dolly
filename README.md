@@ -5,7 +5,8 @@ encrypted. The only storage is the two devices themselves, and the only third pa
 public STUN servers that learn nothing but an IP address.
 
 > **Status: early.** The cryptographic and networking core is built and tested on both iOS and
-> Android stacks. There is no app yet, and the code has **not been independently audited**. Don't use
+> Android stacks, and has been run between a Mac (Swift) and a Windows PC (Kotlin) on two different
+> networks. There is no app yet, and the code has **not been independently audited**. Don't use
 > it to protect anything that matters until it has been.
 
 ## How it works
@@ -90,6 +91,10 @@ cd core-kotlin && gradle -q --console=plain run
 4. Compare the two fingerprints over a call to make sure you reached the right person.
 5. Type messages. `/quit` leaves. Messages only send while both sides are online.
 
+On Windows only the Kotlin tool runs (CryptoKit and POSIX sockets are Apple-only). Build it with
+`gradle installDist` in `core-kotlin`, then run `build\install\dolly\bin\dolly.bat`. Allow the
+firewall prompt on first run.
+
 To check that the Swift and Kotlin implementations really interoperate over real UDP on one machine:
 
 ```sh
@@ -122,7 +127,11 @@ Found a security problem? Please report it privately to the maintainer rather th
 
 - [x] Protocol spec, ticket/handshake/ratchet core in Swift and Kotlin, with cross-checked vectors
 - [x] STUN, hole punching, reliable delivery, chunking, simulated-network tests
-- [ ] Test on real mobile networks (phone hotspot, carrier NAT) and decide whether a stateless
+- [x] Real-network test with the terminal chat: Swift on macOS behind a phone hotspot and Kotlin on
+      Windows behind home broadband connected directly, in both directions, with matching fingerprints
+- [x] Dual-stack IPv6/IPv4 sockets (untested on a real IPv6-only network; IPv6-only carriers reach
+      IPv4 peers through NAT64/464XLAT, which worked in the test above)
+- [ ] Test phone-to-phone with both sides on carrier networks, then decide whether a stateless
       ciphertext relay is needed as a fallback
 - [ ] Encrypted local storage: message database and contacts, keys in the Secure Enclave / Android Keystore
 - [ ] Apps: SwiftUI and Android, QR and RCS ticket exchange

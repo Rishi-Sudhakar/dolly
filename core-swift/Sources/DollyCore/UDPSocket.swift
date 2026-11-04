@@ -9,29 +9,34 @@ public func monotonicMillis() -> Int64 {
     Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000)
 }
 
-/// A bare IPv4 UDP socket (POSIX, no dependencies). The same socket must be used for STUN and for
+/// A bare dual-stack UDP socket (POSIX, no dependencies): one socket carries both IPv6 and IPv4 traffic,
+/// with IPv4 peers addressed as IPv4-mapped IPv6 addresses. The same socket must be used for STUN and for
 /// talking to the peer, otherwise the NAT mapping STUN reported is not the one the peer reaches.
 public final class UDPSocket {
+    private static let v4MappedPrefix = Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff])
+
     private let fd: Int32
     public let localPort: UInt16
 
     public init(port: UInt16 = 0) throws {
-        let s = socket(AF_INET, SOCK_DGRAM, 0)
+        let s = socket(AF_INET6, SOCK_DGRAM, 0)
         guard s >= 0 else { throw DollyError.connectionFailed }
 
-        var address = UDPSocket.sockaddrIn(address: in_addr(s_addr: 0), port: port)
+        var v6Only: Int32 = 0
+        let dualStack = setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &v6Only, socklen_t(MemoryLayout<Int32>.size))
+        var address = UDPSocket.sockaddrIn6(address: Data(count: 16), port: port)
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(s, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(s, $0, socklen_t(MemoryLayout<sockaddr_in6>.size))
             }
         }
-        guard bound == 0 else {
+        guard dualStack == 0, bound == 0 else {
             close(s)
             throw DollyError.connectionFailed
         }
 
-        var local = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        var local = sockaddr_in6()
+        var length = socklen_t(MemoryLayout<sockaddr_in6>.size)
         let named = withUnsafeMutablePointer(to: &local) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(s, $0, &length) }
         }
@@ -40,35 +45,35 @@ public final class UDPSocket {
             throw DollyError.connectionFailed
         }
         fd = s
-        localPort = UInt16(bigEndian: local.sin_port)
+        localPort = UInt16(bigEndian: local.sin6_port)
     }
 
     deinit { close(fd) }
 
     public func send(_ data: Data, to endpoint: Endpoint) throws {
-        guard endpoint.kind == .v4 else { throw DollyError.badEndpoint }
-        // The four address bytes are already in network order, which is how s_addr is laid out in memory.
-        let raw = endpoint.address.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
-        var address = UDPSocket.sockaddrIn(address: in_addr(s_addr: raw), port: endpoint.port)
+        var address = UDPSocket.sockaddrIn6(
+            address: endpoint.kind == .v6 ? endpoint.address : UDPSocket.v4MappedPrefix + endpoint.address,
+            port: endpoint.port
+        )
         let sent = data.withUnsafeBytes { buffer in
             withUnsafePointer(to: &address) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    sendto(fd, buffer.baseAddress, buffer.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    sendto(fd, buffer.baseAddress, buffer.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in6>.size))
                 }
             }
         }
         guard sent >= 0 else { throw DollyError.connectionFailed }
     }
 
-    /// Waits up to `timeoutMs` for one datagram.
+    /// Waits up to `timeoutMs` for one datagram. IPv4 senders are reported as IPv4 endpoints.
     public func receive(timeoutMs: Int32) -> (Data, Endpoint)? {
         var descriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
         guard poll(&descriptor, 1, timeoutMs) > 0, descriptor.revents & Int16(POLLIN) != 0 else { return nil }
 
         var buffer = [UInt8](repeating: 0, count: 2048)
         let capacity = buffer.count
-        var from = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        var from = sockaddr_in6()
+        var length = socklen_t(MemoryLayout<sockaddr_in6>.size)
         let count = withUnsafeMutablePointer(to: &from) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                 recvfrom(fd, &buffer, capacity, 0, $0, &length)
@@ -78,10 +83,10 @@ public final class UDPSocket {
         return (Data(buffer[0..<count]), endpoint)
     }
 
-    /// IPv4 addresses of `host` (DNS lookup).
+    /// IPv4 and IPv6 addresses of `host` (DNS lookup).
     public static func resolve(host: String, port: UInt16) -> [Endpoint] {
         var hints = addrinfo()
-        hints.ai_family = AF_INET
+        hints.ai_family = AF_UNSPEC
         hints.ai_socktype = SOCK_DGRAM
         var result: UnsafeMutablePointer<addrinfo>?
         guard getaddrinfo(host, String(port), &hints, &result) == 0, let first = result else { return [] }
@@ -90,51 +95,76 @@ public final class UDPSocket {
         var endpoints: [Endpoint] = []
         var cursor: UnsafeMutablePointer<addrinfo>? = first
         while let current = cursor {
-            if current.pointee.ai_family == AF_INET, let sa = current.pointee.ai_addr {
-                let sin = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
-                if let endpoint = UDPSocket.endpoint(sin) { endpoints.append(endpoint) }
+            if let sa = current.pointee.ai_addr {
+                switch current.pointee.ai_family {
+                case AF_INET:
+                    let sin = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+                    if let endpoint = UDPSocket.endpoint(sin) { endpoints.append(endpoint) }
+                case AF_INET6:
+                    let sin6 = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee }
+                    if let endpoint = UDPSocket.endpoint(sin6) { endpoints.append(endpoint) }
+                default:
+                    break
+                }
             }
             cursor = current.pointee.ai_next
         }
         return endpoints
     }
 
-    /// IPv4 addresses of this machine's active network interfaces (loopback and link-local excluded).
-    /// Candidates for peers on the same LAN, where a router often cannot loop packets back through its public address.
-    public static func localIPv4Addresses() -> [Data] {
+    /// Addresses of this machine's active network interfaces at `port`: IPv4 (loopback and link-local
+    /// excluded) and global IPv6 (2000::/3). Candidates for peers on the same LAN, where a router often
+    /// cannot loop packets back through its public address, and for peers reachable over IPv6 without NAT.
+    public static func localAddresses(port: UInt16) -> [Endpoint] {
         var list: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&list) == 0, let first = list else { return [] }
         defer { freeifaddrs(list) }
 
-        var addresses: [Data] = []
+        var endpoints: [Endpoint] = []
         var cursor: UnsafeMutablePointer<ifaddrs>? = first
         while let current = cursor {
             let flags = Int32(current.pointee.ifa_flags)
-            if let sa = current.pointee.ifa_addr, sa.pointee.sa_family == sa_family_t(AF_INET),
-               flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 {
-                let sin = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
-                let bytes = withUnsafeBytes(of: sin.sin_addr.s_addr) { Data($0) }
-                if !(bytes[0] == 169 && bytes[1] == 254) { addresses.append(bytes) }
+            if let sa = current.pointee.ifa_addr, flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 {
+                if sa.pointee.sa_family == sa_family_t(AF_INET) {
+                    let sin = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+                    let bytes = withUnsafeBytes(of: sin.sin_addr.s_addr) { Data($0) }
+                    if !(bytes[0] == 169 && bytes[1] == 254), let endpoint = try? Endpoint(kind: .v4, address: bytes, port: port) {
+                        endpoints.append(endpoint)
+                    }
+                } else if sa.pointee.sa_family == sa_family_t(AF_INET6) {
+                    let sin6 = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee }
+                    let bytes = withUnsafeBytes(of: sin6.sin6_addr) { Data($0) }
+                    if bytes[0] & 0xE0 == 0x20, let endpoint = try? Endpoint(kind: .v6, address: bytes, port: port) {
+                        endpoints.append(endpoint)
+                    }
+                }
             }
             cursor = current.pointee.ifa_next
         }
-        return addresses
+        return endpoints
     }
 
-    private static func sockaddrIn(address: in_addr, port: UInt16) -> sockaddr_in {
-        var sin = sockaddr_in()
+    private static func sockaddrIn6(address: Data, port: UInt16) -> sockaddr_in6 {
+        var sin6 = sockaddr_in6()
         #if canImport(Darwin)
-        sin.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        sin6.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
         #endif
-        sin.sin_family = sa_family_t(AF_INET)
-        sin.sin_port = port.bigEndian
-        sin.sin_addr = address
-        return sin
+        sin6.sin6_family = sa_family_t(AF_INET6)
+        sin6.sin6_port = port.bigEndian
+        withUnsafeMutableBytes(of: &sin6.sin6_addr) { $0.copyBytes(from: address) }
+        return sin6
     }
 
     private static func endpoint(_ sin: sockaddr_in) -> Endpoint? {
         let bytes = withUnsafeBytes(of: sin.sin_addr.s_addr) { Data($0) }
         return try? Endpoint(kind: .v4, address: bytes, port: UInt16(bigEndian: sin.sin_port))
+    }
+
+    private static func endpoint(_ sin6: sockaddr_in6) -> Endpoint? {
+        let bytes = withUnsafeBytes(of: sin6.sin6_addr) { Data($0) }
+        let port = UInt16(bigEndian: sin6.sin6_port)
+        if bytes.prefix(12) == v4MappedPrefix { return try? Endpoint(kind: .v4, address: Data(bytes.suffix(4)), port: port) }
+        return try? Endpoint(kind: .v6, address: bytes, port: port)
     }
 }
 

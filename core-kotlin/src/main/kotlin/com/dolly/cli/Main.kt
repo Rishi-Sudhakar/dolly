@@ -124,7 +124,7 @@ fun main(args: Array<String>) {
                 else "Only one STUN server answered, so the network type is unknown.",
             )
         }
-        for (address in UdpSocket.localIPv4Addresses()) offer(Endpoint(Endpoint.Kind.V4, address, socket.localPort))
+        UdpSocket.localAddresses(socket.localPort).forEach(::offer)
     }
     if (candidates.isEmpty()) fail("no usable network address found")
 

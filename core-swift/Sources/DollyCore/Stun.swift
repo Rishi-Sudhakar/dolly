@@ -39,9 +39,11 @@ public enum Stun {
     }
 
     /// Compare the mapped endpoints different STUN servers reported for the same local socket.
+    /// Only IPv4 results count: IPv6 normally has no address translation to classify.
     public static func mappingBehavior(_ results: [Endpoint]) -> MappingBehavior {
-        guard results.count >= 2 else { return .unknown }
-        return results.allSatisfy { $0 == results[0] } ? .endpointIndependent : .symmetric
+        let v4 = results.filter { $0.kind == .v4 }
+        guard v4.count >= 2 else { return .unknown }
+        return v4.allSatisfy { $0 == v4[0] } ? .endpointIndependent : .symmetric
     }
 
     private static func parse(_ data: Data, transactionID: Data) throws -> Endpoint {

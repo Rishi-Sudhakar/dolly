@@ -4,12 +4,15 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.NetworkInterface
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 fun monotonicMillis(): Long = System.nanoTime() / 1_000_000
 
 /**
- * A plain UDP socket (JDK only). The same socket must be used for STUN and for talking to the peer,
+ * A plain dual-stack UDP socket (JDK only): the wildcard socket carries IPv6 and IPv4 traffic, and the JDK
+ * reports IPv4 senders as IPv4 addresses. The same socket must be used for STUN and for talking to the peer,
  * otherwise the NAT mapping STUN reported is not the one the peer reaches. On Android, call from a
  * background thread.
  */
@@ -18,7 +21,6 @@ class UdpSocket(port: Int = 0) : AutoCloseable {
     val localPort: Int get() = socket.localPort
 
     fun send(data: ByteArray, to: Endpoint) {
-        if (to.kind != Endpoint.Kind.V4) throw DollyException(DollyError.BadEndpoint)
         socket.send(DatagramPacket(data, data.size, InetAddress.getByAddress(to.address), to.port))
     }
 
@@ -32,32 +34,33 @@ class UdpSocket(port: Int = 0) : AutoCloseable {
         } catch (e: SocketTimeoutException) {
             return null
         }
-        val address = packet.address.address
-        val kind = if (address.size == 4) Endpoint.Kind.V4 else Endpoint.Kind.V6
-        return packet.data.copyOfRange(packet.offset, packet.offset + packet.length) to Endpoint(kind, address, packet.port)
+        return packet.data.copyOfRange(packet.offset, packet.offset + packet.length) to endpoint(packet.address, packet.port)
     }
 
     override fun close() = socket.close()
 
     companion object {
         /**
-         * IPv4 addresses of this machine's active network interfaces (loopback and link-local excluded).
-         * Candidates for peers on the same LAN, where a router often cannot loop packets back through its public address.
+         * Addresses of this machine's active network interfaces at [port]: IPv4 (loopback and link-local excluded)
+         * and global IPv6 (2000::/3). Candidates for peers on the same LAN, where a router often cannot loop packets
+         * back through its public address, and for peers reachable over IPv6 without NAT.
          */
-        fun localIPv4Addresses(): List<ByteArray> =
-            (java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList())
+        fun localAddresses(port: Int): List<Endpoint> =
+            (NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList())
                 .filter { it.isUp && !it.isLoopback }
                 .flatMap { it.inetAddresses.toList() }
-                .filterIsInstance<Inet4Address>()
-                .filter { !it.isLinkLocalAddress }
-                .map { it.address }
+                .filter { if (it is Inet4Address) !it.isLinkLocalAddress else it.address[0].toInt() and 0xE0 == 0x20 }
+                .map { endpoint(it, port) }
 
-        /** IPv4 addresses of [host] (DNS lookup). */
+        /** IPv4 and IPv6 addresses of [host] (DNS lookup). */
         fun resolve(host: String, port: Int): List<Endpoint> = try {
-            InetAddress.getAllByName(host).filterIsInstance<Inet4Address>().map { Endpoint(Endpoint.Kind.V4, it.address, port) }
-        } catch (e: java.net.UnknownHostException) {
+            InetAddress.getAllByName(host).map { endpoint(it, port) }
+        } catch (e: UnknownHostException) {
             emptyList()
         }
+
+        private fun endpoint(address: InetAddress, port: Int) =
+            Endpoint(if (address is Inet4Address) Endpoint.Kind.V4 else Endpoint.Kind.V6, address.address, port)
     }
 }
 
