@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-public struct Contact: Equatable {
+public struct Contact: Equatable, Sendable {
     public let identityKey: Data  // Ed25519, 32 bytes; a ticket from this person must carry exactly this key
     public var name: String
     public var verified: Bool     // fingerprints compared out of band
@@ -15,7 +15,7 @@ public struct Contact: Equatable {
     }
 }
 
-public struct Message: Equatable {
+public struct Message: Equatable, Sendable {
     public let id: Data           // 16 random bytes
     public let at: UInt64         // unix milliseconds
     public let outgoing: Bool

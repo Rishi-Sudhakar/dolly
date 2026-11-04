@@ -3,3 +3,7 @@
 build/
 *.xcodeproj/xcuserdata/
 .DS_Store
+.swiftpm/
+.claude/
+*.xcuserstate
+xcuserdata/
