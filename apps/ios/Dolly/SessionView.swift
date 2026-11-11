@@ -33,6 +33,7 @@ struct SessionView: View {
 
 private struct Pairing: View {
     @Environment(AppModel.self) private var model
+    @State private var pasted = ""
 
     var body: some View {
         Form {
@@ -56,9 +57,14 @@ private struct Pairing: View {
                     }
                     LabeledContent("Their fingerprint", value: model.peerFingerprint)
                 } else {
-                    PasteButton(payloadType: String.self) { strings in
-                        Task { @MainActor in model.connect(pasted: strings.joined()) }
-                    }
+                    TextField("Their link", text: $pasted, axis: .vertical)
+                        .lineLimit(2...4)
+                        .font(.caption.monospaced())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Button("Paste", systemImage: "doc.on.clipboard") { pasted = UIPasteboard.general.string ?? pasted }
+                    Button("Connect", systemImage: "link") { model.connect(pasted: pasted) }
+                        .disabled(pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if let notice = model.notice {
                     Text(notice).foregroundStyle(.red)

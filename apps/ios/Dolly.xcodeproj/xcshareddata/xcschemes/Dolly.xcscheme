@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "000000000000000100000000"
-               BuildableName = "Untitled Project.app"
-               ReferencedContainer = "container:Untitled Project.xcodeproj">
+               BuildableName = "Dolly.app"
+               ReferencedContainer = "container:Dolly.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,8 +45,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "000000000000000100000000"
-            BuildableName = "Untitled Project.app"
-            ReferencedContainer = "container:Untitled Project.xcodeproj">
+            BuildableName = "Dolly.app"
+            ReferencedContainer = "container:Dolly.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -61,8 +61,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "000000000000000100000000"
-            BuildableName = "Untitled Project.app"
-            ReferencedContainer = "container:Untitled Project.xcodeproj">
+            BuildableName = "Dolly.app"
+            ReferencedContainer = "container:Dolly.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

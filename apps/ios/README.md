@@ -6,7 +6,7 @@ actor around the encrypted store (`Database`). No third-party packages.
 
 ## Build
 
-Open `Untitled Project/Untitled Project.xcodeproj` in Xcode 27. The project uses the local `core-swift`
+Open `Dolly.xcodeproj` in Xcode 27. The project uses the local `core-swift`
 package (`DollyCore`), so there is nothing to install. Pick your Team under Signing & Capabilities, plug in an
 iPhone and run. Minimum deployment is iOS 26. The app needs the local-network permission
 (`INFOPLIST_KEY_NSLocalNetworkUsageDescription`).
