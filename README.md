@@ -42,6 +42,8 @@ public STUN servers that learn nothing but an IP address.
 | [`docs/TRANSPORT.md`](docs/TRANSPORT.md) | STUN, hole punching, reliable delivery, chunking, failure handling |
 | `core-swift/` | iOS/macOS core: Swift package `DollyCore` and the `dolly-selftest` checks |
 | `core-kotlin/` | Android/JVM core: Kotlin library and tests |
+| `apps/ios/` | iPhone app: SwiftUI, Secure Enclave key custody |
+| `apps/android/` | Android app: Compose, Android Keystore key custody, foreground service |
 | `test-vectors/` | Shared conformance vectors. Swift writes them, Kotlin must reproduce them byte for byte |
 
 Both implementations are tested against each other, so an iPhone and an Android phone can talk. The

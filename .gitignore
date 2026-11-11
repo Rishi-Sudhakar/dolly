@@ -1,9 +1,16 @@
-.build/
-.gradle/
-build/
-*.xcodeproj/xcuserdata/
 .DS_Store
-.swiftpm/
 .claude/
-*.xcuserstate
+
+# SwiftPM, Xcode
+.build/
+.swiftpm/
 xcuserdata/
+*.xcuserstate
+
+# Gradle, Android Studio
+.gradle/
+.kotlin/
+build/
+.idea/
+*.iml
+local.properties
