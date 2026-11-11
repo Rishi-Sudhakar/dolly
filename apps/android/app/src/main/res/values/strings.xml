@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dolly</string>
+    <string name="session_channel">Active conversation</string>
+    <string name="session_title">Dolly is connected</string>
+    <string name="session_text">Keeping your conversation open. Tap to return.</string>
+</resources>
